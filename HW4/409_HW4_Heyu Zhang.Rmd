@@ -1,0 +1,338 @@
+---
+header-includes:
+- \usepackage{amssymb, amsmath, amsthm}
+- \usepackage{tabu}
+- \newcommand{\E}{\mathbb{E}}
+- \newcommand{\var}{{\rm Var}}
+- \newcommand{\N}{\mathcal{N}}
+output: pdf_document
+title: "Homework 4"
+author: "Heyu Zhang"
+---
+
+\noindent \begin{tabu} to \textwidth {@{}X[4 l] @{}X[r]}
+  \textbf{MFE409 Financial Risk Management}   & \\ 
+  \textbf{Valentin Haddad}         & 
+\end{tabu}
+
+
+
+### Question 1
+1.
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+setwd("/Users/auroracappadocian/Downloads/409FRM/HW3")
+suppressMessages(require(data.table))
+suppressMessages(require(lubridate))
+suppressMessages(require(zoo))
+suppressMessages(require(ggplot2))
+suppressMessages(require(dplyr))
+suppressMessages(library(knitr))
+suppressMessages(require(quantmod))
+returns_data <- as.data.table(read.csv("hw3_returns2.csv"))
+returns_data[,Date:=mdy(Date)]
+rollingWindow <- 252
+c <- 0.99
+lambda  <- 0.995
+cal_hist_VaR <- function(return, c){
+  sorted_ret <- sort(return)
+  Var_point <- ceiling(length(sorted_ret) * (1-c))
+  var <- sorted_ret[Var_point]
+  return(var)
+}
+cal_exponential_VaR <- function(return, c){
+  n <- length(return)
+  weight <- lambda^seq((n-1), 0, -1) * (1-lambda)/(1-lambda^n)
+  df <- cbind(weight, return)
+  df_sorted <- df[order(return),]
+  df_sorted <- cbind(df_sorted, cumsum=cumsum(df_sorted[,1]))
+  pos <- which(df_sorted[,3]>(1-c))[1]
+  return(df_sorted[pos,2])
+}
+cal_parametric_StdDev_VaR <- function(return,ci_c){
+  sigma <- sd(return)
+  n <- length(return)
+  mu <- mean(return)
+  x <- mu + sigma * qnorm(ci_c)
+  fx <- (1/sqrt(2*pi*sigma^2)) * exp(- (x-mu)^2/(2*sigma^2))
+  stdVaR <- (1/fx) * sqrt((1 - ci_c) * ci_c/n)
+  return(stdVaR)
+}
+# calculating historical VaR
+returns_data[, historicalVaR := shift(rollapply(returns_data$Return, rollingWindow, function (return){
+  return(cal_hist_VaR(return,c))
+}, fill=NA, align="right"))
+]
+# calculating exponential Weighted VaR
+returns_data[, exponentialWeightedVaR := shift(rollapply(returns_data$Return, rollingWindow, function(return){
+  cal_exponential_VaR(return, c)
+}, fill=NA, align="right"))]
+data_2005_onwards <- returns_data[Date >= "2015-01-01"]
+```
+
+
+
+####Parametric
+
+Use sample size 252.
+
+For historical (Parametric) assuming normal distribution, 
+
+ * Find the mean and standard deviation
+ 
+ * Find the pdf of the normal distribution 
+ 
+ * Find the standard deviation of the VaR at each day.
+ 
+ * Find the confidence internal at 95 % for the VaR 
+
+Upper Interval = historical VaR + $Z_{0.975}$ * $StdDev_{VaR}$
+  
+Lower Interval = historical VaR + $Z_{0.025}$ * $StdDev_{VaR}$
+ 
+calculate the standard deviation of the VaR
+
+```{r}
+sample_size <- 252
+# 95% confidence internval
+ci_c <- 0.05
+returns_data[, parametric_VaR_StdDev :=  shift(rollapply(returns_data$Return, rollingWindow, function (returns){
+   cal_parametric_StdDev_VaR(returns, ci_c)
+},fill=NA, align="right"))]
+returns_data[, `:=`(parametric_Hist_LI =  historicalVaR + qnorm(0.025) * parametric_VaR_StdDev, parametric_Hist_UI = historicalVaR + qnorm(0.975) * parametric_VaR_StdDev)]
+qn21plot <- returns_data[Date >= "2015-01-01"]
+plot(x = qn21plot$Date, y= qn21plot$historicalVaR, type = "l", 
+     main="Historical VaR at 95% Confidence Interval With Parametric", xlab = "Date",
+     ylab= "VaR in stock return", ylim = c(-0.1,0))
+lines(x= qn21plot$Date, y= qn21plot$parametric_Hist_LI, col = "blue")
+lines(x= qn21plot$Date, y= qn21plot$parametric_Hist_UI, col = "green")
+legend("topright",legend=c("Lower Interval","Upper Interval"),fill=c("blue","green"), cex = 0.8)
+```
+
+
+
+####Bootstrap
+
+Still using sample size 252. Choose the number of draws for bootstrap to be 1000
+
+At each period (rolling 252 days):
+
+  * Take sample size of 252
+  
+  * Get historical VaR
+  
+At the end, take the 2.5% and 97.5% quantile of the VaRs collected from each period.
+
+For historical (rolling window)
+
+```{r}
+sample_size <- 252
+iter <- 1000
+lambda <- 0.995
+returns_data[, bstrap_range_hist :=  shift(rollapply(returns_data$Return, rollingWindow, function (returns){
+    #initialze empty list of 1000
+    totalVaR <- rep(0, iter)
+    
+    # take the sample 1000 times, get totalVaR for each time
+    for(i in 1:iter){
+      # take 252 returns with replacement
+      VaR_this_period <- sample(returns, sample_size, replace = TRUE)
+      totalVaR[i] <- cal_hist_VaR(VaR_this_period, c)
+    }
+    # sort the totalVaRs drawn from 1000 samples
+    sortedTotalVaR <- sort(totalVaR)
+    return(paste0(sortedTotalVaR[25],",",sortedTotalVaR[975]))
+},fill=NA, align="right"))]
+returns_data[, bstrap_hist_LI:= sapply(returns_data$bstrap_range_hist, function(range){
+  unlist(strsplit(range, ","))[1]
+})]
+returns_data[, bstrap_hist_UI:= sapply(returns_data$bstrap_range_hist, function(range){
+  unlist(strsplit(range, ","))[2]
+})]
+# plot the data
+qn22hist <- returns_data[Date >= "2015-01-01"]
+plot(x = qn22hist$Date, y= qn22hist$historicalVaR, type = "l", 
+     main="Historical VaR at 95% Confidence Interval With Bootstrap", xlab = "Date",
+     ylab= "VaR in stock return", ylim = c(-0.2,0))
+lines(x= qn22hist$Date, y= qn22hist$bstrap_hist_LI, col = "blue")
+lines(x= qn22hist$Date, y= qn22hist$bstrap_hist_UI, col = "green")
+legend("topright",legend=c("Lower Interval","Upper Interval"),fill=c("blue","green"), cex = 0.8)
+```
+
+For exponential Weighted 
+
+```{r}
+returns_data[, bstrap_range_exp_wt :=  shift(rollapply(returns_data$Return, rollingWindow, function (returns){
+    #initialze empty list of 1000
+    totalVaR_ex <- rep(0, iter)
+    
+    # take the sample 1000 times, get totalVaR for each time
+    for(i in 1:iter){
+      # take 252 returns with replacement
+      VaR_this_period <- sample(returns, sample_size, replace = TRUE)
+      totalVaR_ex[i] <- cal_exponential_VaR(VaR_this_period, c)
+    }
+    # sort the totalVaRs drawn from 1000 samples
+    sortedTotalVaR <- sort(totalVaR_ex)
+    return(paste0(sortedTotalVaR[25],",",sortedTotalVaR[975]))
+},fill=NA, align="right"))]
+# plot the data
+returns_data[, bstrap_exp_LI := sapply(returns_data$bstrap_range_exp_wt, function(range){
+  unlist(strsplit(range, ","))[1]
+})]
+returns_data[, bstrap_exp_UI := sapply(returns_data$bstrap_range_exp_wt, function(range){
+  unlist(strsplit(range, ","))[2]
+})]
+# Plot the data
+qn2exp <- returns_data[Date >= "2015-01-01"]
+plot(x = qn2exp$Date, y= qn2exp$exponentialWeightedVaR, type = "l", 
+     main="Exponential Weighted VaR at 95% Confidence Interval With Bootstrap", xlab = "Date",
+     ylab= "VaR in stock return", ylim = c(-0.2,0))
+lines(x= qn2exp$Date, y= qn2exp$bstrap_exp_LI, col = "blue")
+lines(x= qn2exp$Date, y= qn2exp$bstrap_exp_UI, col = "green")
+legend("topright",legend=c("Lower Interval","Upper Interval"),fill=c("blue","green"), cex = 0.8)
+#write.table(returns_data, file = "returns_data.csv", row.names=FALSE, sep=",")
+```
+
+2.   
+
+Calculate the Exponential Weighted Moving Average (EWMA)
+
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+setwd("/Users/auroracappadocian/Downloads/409FRM/HW3")
+suppressMessages(require(data.table))
+suppressMessages(require(lubridate))
+suppressMessages(require(zoo))
+suppressMessages(require(rugarch))
+rm(list=ls())
+returns_data <- as.data.table(read.csv("hw3_returns2.csv"))
+returns_data[,Date:=mdy(Date)]
+# get volatility
+returns_data[, volatility := Return^2]
+returns_data[, volatility := cumsum(volatility)]
+returns_data[, observation := 1]
+returns_data[, observation := cumsum(observation)]
+returns_data[, volatility := volatility/observation]
+lambda <- 0.995
+returns_data[, one_minus_lambda := (1 - lambda)* (Return^2)]
+returns_data$ewma[1] <- returns_data$one_minus_lambda[1]
+size <- length(returns_data$ewma)
+for(i in 2:size){
+  returns_data$ewma[i] <- lambda * returns_data$ewma[i-1] +  returns_data$one_minus_lambda[i]
+}
+plot(x=returns_data$Date, y= returns_data$ewma, type="l", xlab = "Date", ylab="Volatility", main = "EWMA")
+returns_data[, observation := NULL]
+returns_data[, one_minus_lambda := NULL]
+```
+Next, find the VaR at 99% 
+The daily Value at Risk (VaR) is simply a function of the standard deviation or volatility and the desired confidence level. 
+
+Value at Risk (VAR) = sqrt(EWMA predicted Volatility) × z-value of standard normal cumulative distribution
+
+Calculate Daily VaR for both historical and exponential
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+c <- 0.01
+z <- qnorm(0.01)
+returns_data[, VaR := sqrt(ewma) * z]
+data_2005_onwards <- returns_data[Date >= "2015-01-01"]
+plot(x = data_2005_onwards$Date, y= data_2005_onwards$Return, type = "l", 
+     main="Stock Return against VaRs", xlab = "Date",
+     ylab= "Stock Return")
+lines(x= data_2005_onwards$Date, y= data_2005_onwards$VaR, col = "blue")
+legend("bottomright",legend=c("Return","VaR"),fill=c("black","blue"), cex = 0.8)
+Exceptions <- sum(data_2005_onwards[,Return < VaR ])
+cat("There are", Exceptions, "exceptions with EWMA")
+```
+
+3. 
+
+GARCH(1,1) formula:
+
+$$\sigma^2_t = \gamma V_L + \alpha R^2_{t-1} + \beta \sigma^2_{t-1}$$ 
+
+where $w =  \gamma V_L$
+
+It is EWMA + long-run average
+
+Using Built in Rugarch:
+
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+library(rugarch)
+mymodel <- ugarchspec(variance.model = list(model = "fGARCH", submodel='GARCH', garchOrder = c(1, 1)), mean.model = list(armaOrder = c(0, 0), include.mean = F), 
+distribution.model = "norm")
+fitVal <- ugarchfit(data =returns_data$Return , spec = mymodel, method="BFGS")
+```
+
+Start with the optimal parameters
+
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+omega <- as.double(fitVal@fit$coef[1])
+alpha1 <- as.double(fitVal@fit$coef[2])
+beta1 <- as.double(fitVal@fit$coef[3])
+cat("omega: ",omega,", alpha: ", alpha1, ", beta1: ", beta1, "\n")
+# using the sigma from
+garchVol <-fitVal@fit$sigma
+returns_data <- cbind(returns_data, garchVol)
+returns_data[, GARCHVaR := garchVol * z]
+data_2005_onwards <- returns_data[Date >= "2015-01-01"]
+plot(x = data_2005_onwards$Date, y= data_2005_onwards$Return, type = "l", 
+     main="Stock Return against VaRs Garch (1,1)", xlab = "Date",
+     ylab= "Stock Return")
+lines(x= data_2005_onwards$Date, y= data_2005_onwards$GARCHVaR, col = "blue")
+legend("bottomright",legend=c("Return","VaR Weighted"),fill=c("black","blue"), cex = 0.8)
+Except <- sum(data_2005_onwards[,Return < GARCHVaR ])
+cat('There are', Except, 'exceptions with Garch(1,1)')
+```
+
+4.
+
+In the previous HW3, I obtained 8 exceptions using historical and exponential weighting on normalized return. I would still say that method is the best technique to estimate the VaR compared to what I do in this problem set.
+
+
+### Question 2
+1.
+
+Jasper Wang: His key focus was on measuring and monitoring VaR. His motivation was to introduce “international standards” in risk measurement and management to Guang Guo. 
+Jianguo Lu: He was in charge of trading strategy and asset allocation. His motivation was to focus solely on the profit or loss realized from their trades. 
+Charles Pan: The CEO was watching the dynamic between the risk management and trading departments closely. His motivation is to balance every department's work and ensure the normal activity in the Bank to generate profit  continuously. 
+Their tension is that,  Jasper  want to limit the transaction to reduce the risk, however, Jianguo doesn't care about that since their strategy worked well without any risk management. Meanwhile, Charles Pan  did not want to antagonize Jianguo although he was aware that trading profits needed to be better rationalized and he understood the concepts of return on equity and risk adjusted returns. As the head of a profit center that generated significant earnings, Jianguo was a powerful figure at the firm, so Charles was loath to intervene directly.
+
+2.
+
+VaR was one of the core risk metrics recommended by international banking regulators (Basel rules) and was widely adopted to calculate banks’ minimum capital requirements. Since his job was to push Guang Guo in the direction of international risk management standards, he decided to use VaR.
+
+3.
+
+Because he believed that no VaR model could replace his years of experience in Chinese markets and that “Chinese markets are different from Western markets.” Jianguo asserted that the Shanghai equity markets were dominated by speculative retail investors and prone to unpredictable movements that could never be adequately captured by statistical models. He pointed out that despite all of their sophisticated models, the United States and Europe had recently suffered from a severe financial crisis caused in part by the poor pricing of risk. I don't think his idea  is correct. Even if Chinese market is not as mature as the US market, the risk management is still needed to reduce the trasaction risk more or less. As for the poor pricing of risk during the recession time, the main fault is due to the inacurate prediction of volatility but not the VaR itself is wrong.
+
+4.
+
+(1)Compare the average percent exceptions, we find that the percentage of Shanghai Market is more close to 1-95%=5%, compared with S&P sheet.    
+(2)    
+3-month: S&P: 6.1%, Shanghai:5.6%    
+6-month: S&P: 5.6%, Shanghai:5.0%    
+9-month: S&P: 5.6%, Shanghai:4.9%    
+The conclusion won't change.    
+(3)
+```{r}
+n=1
+m=0.061
+c=0.95
+testVal <- -2*log(c^(n-m)*(1-c)^m)+2*log((1-(m/n))^(n-m)*(m/n)^m)
+chisq_val <- qchisq(p=c,df=1)
+print(c(testVal,chisq_val))
+```
+
+We accept the VaR model since the testVal is smaller than chisq_val    
+
+5.
+
+Jasper would say that based on the historical data, his model will be relatively precise figure out the value at risk. That is to say his model will prevent the company from a unexpected huge loss to some extent.
+
+6.
+
+I believe he will be successful in the Chinese market. From the result of backtest, we find that his model perform better in the Chinses stock market rather than the S&P 500, which suggest that his risk management will be more successful in the Chinese market. I would suggest the people who in the same position to apply the model in the western market on the Chinese market since they are similar to some extent.
+
+7.
+
+The risk prevention and control capabilities of the Chinese banking industry continue to improve. Over the past 10 years, China's banking industry has significantly improved its ability to manage and manage risks. In particular, since 2013, China's economic growth became slower. Credit risk pressure has continued to increase, and the banking industry has successfully responded to the continued downward pressure on asset quality. The Chinese banking industry has continuously consolidated its provision and capital base. Its loss absorption capacity has been significantly improved.
+
