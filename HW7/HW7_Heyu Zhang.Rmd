@@ -1,0 +1,88 @@
+---
+title: "Risk Management Homework 7"
+author: "Heyu Zhang"
+output: pdf_document
+---
+# Question 1
+## 1.
+The core strategy of LTCM can be described as “relative-value” or “convergence-arbitrage” trades, trying to take advantage small differences in prices of closely priced trades. This strategy was used in variety of markets, like long swap-government spreads, long mortgage backed securities versus short government, long high yielding versus short low-yielding European bonds, Japanese convertible bond arbitrage etc. LTCM also invested in non- arbitrage strategies like short position in equity options, bets on takeover stocks, emerging market debt and even catastrophe bonds. Most of the time, these stocks were profitable, expect in cases of default or market disruption.
+
+## 2. 
+Strategies like convergence-arbitrage generate very low profits, due to which leverage needs to be used to create attractive returns. To control risk, the target ceiling risk level was set to the volatility of the unleveraged position in US equities. As the optimization was constrained on volatility, there was a high usage of leverage, as LTCM ended up four times the asset size of the next largest hedge fund.
+
+## 3.
+Until 1997, LCTM could get leverage at a very low rate, which allowed them to have a very high leverage ratio. In 1997, the strategy didn’t do as well as its initial years because of the reduction of the credit spreads in 1997. Due to this, the strategy became a less profitable.
+To get the returns up, LTCM had to reduce its assets, to bring up the leverage ratio. This also increased the risks. In Mid-1998, a downturn in the mortgage-backed securities market led to a 16% loss for LTCM. Then in August 1998, Russia announced that it was restructuring its bond payments, which was like a default on their payments. Credit and risk premia jumped up drastically, which lead to a dive in stock markets. LTCM lost $550 million on August 21st alone. LTCM had to increase its capital to handle the accelerated increase in leverage ratio, but there were unsuccessful in it.
+
+## 4. 
+LTCM used Value-at-Risk (VAR) as a risk management strategy, which has been highly criticized for its failure. In general, if VAR is used for setting the amount of equity capital, the parameters for the calculation should be chosen carefully. LTCM stated that its daily volatility was $45 million around May 1998. This involved lot of assumptions. It assumed that volatility is constant, even though it has been proved that it can almost double during volatile times. Also, they assumed it to be a normal distribution, which is has been proven to be highly inaccurate. When the firm was making loss, it made a mistake of eliminating the liquid positions as they were less profitable. This made them vulnerable to future margin calls.
+  
+LTCM relied a lot on recent history to estimate risk, assigning low probability to events such as sovereign defaults and major market disruptions such as 1987 crash, which lead to a flight to liquidity.
+  
+The firm’s stress testing wasn’t adequate as the amount it lost was way higher that what the stress testing predicted. Also, it failed to appreciate the fact that its size made it impossible to maneuver much once it had lost $2.3 billion.
+
+## 5.
+These steps can be taken into consideration while coming up with risk management for such trading strategies:
+a. The VAR amount can be decided based on the credit ratings of the company.    
+b. Comprehensive stress testing needs to be done, which takes the possibility of
+change in correlation between assets into consideration. In this case, a decrease in correlation leads to a very high increase in volatility, which in turn reduces the safety factor.     
+c. Realize that a short position in equity volatility has an asymmetric payoff profile.    
+d. Traditional risk management models ignore asset and funding liquidity. This is a big problem when are relatively large and leveraged, as it is important to account for price impact of forced sales.    
+e. Market risk alone isn’t enough to manage risk of strategies. We need to take other risks such as credit and political risk into consideration.    
+f. We should assume constant volatility in risk management models, as it has been proven by fitting other models like GARCH that volatility increases to almost twice during tough times.
+
+   
+# Question 2.   
+## 1.
+$$E_0=5million$$
+$$\sigma_E=0.6$$
+$$F=20million$$
+$$E_0=V_0N(d_1)-Fe^{-rT}N(d_2)=V_0N(d_1)-20*e^{-0.02}N(d_2)=5$$
+$$d_1=\frac{log(V0/F)+(\mu+\sigma^2/2)T}{\sigma\sqrt{T}}=\frac{log(V_0/20)+0.02+\sigma^2/2}{\sigma}$$
+$$d_2=\frac{log(V0/F)+(\mu-\sigma^2/2)T}{\sigma\sqrt{T}}=\frac{log(V_0/20)+0.02-\sigma^2/2}{\sigma}$$
+$$\sigma_EE_0=N(d_1)\sigma V_0=0.6*5=3=N(d_1)\sigma V_0$$
+Solve for $V_0$ and $\sigma$
+```{r}
+e=5
+sigma_e = 0.6
+face = 20
+t=1
+r = 0.02
+d1 = function(v, face, r, sigma, t){ (log(v/face) + (r+sigma^2/2)*t)/(sigma*sqrt(t))} 
+d2 = function(v, face, r, sigma, t){ (log(v/face) + (r-sigma^2/2)*t)/(sigma*sqrt(t))} 
+solve_function = function(roots){
+  sigma = roots[1]
+  V_0 = roots[2]
+  d1_value = d1(V_0, face, r, sigma, t) 
+  d2_value = d2(V_0, face, r, sigma, t) 
+  e_function = V_0*pnorm(d1_value) - face*exp(-r*t)*pnorm(d2_value) 
+  f1 = e_function - e
+  sigma_e_function = pnorm(d1_value)*sigma*V_0/e_function
+  f2 = sigma_e_function - sigma_e
+  return(crossprod(c(f1, f2) ))
+}
+sigma = optim(c(0.09, 1), solve_function)$par[1]
+v_0 = optim(c(0.09, 1), solve_function)$par[2]
+print(paste0("The distance to default is ", d2(v_0, face, r, sigma, t)))
+```
+
+## 2.
+$$Probability\ of\ Default=N(-d)= 0.04323388$$
+```{r}
+prob_default=pnorm(-d2(v_0, face, r, sigma, t))
+prob_default
+```
+
+## 3. 
+$$PV\ of\ Face\ Value=F*e^{-rT}$$
+$$Market\ Value\ of\ Debt=V_0-E_0$$
+$$Expected\ Loss=-\frac{Market\ Value\ of\ Debt-PV\ of\ Face\ Value}{PV\ of\ Face\ Value}$$
+$$Recovery\ Rate=1-\frac{Expected\ Loss}{Probability\ of\ Default}$$
+```{r}
+pv_face = face/(1+r)
+mv_d = v_0-e
+expected_loss=-(mv_d-pv_face)/pv_face
+recovery_rate=1-expected_loss/prob_default
+recovery_rate
+```
+
