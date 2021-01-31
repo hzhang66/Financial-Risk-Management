@@ -1,0 +1,156 @@
+---
+header-includes:
+- \usepackage{amssymb, amsmath, amsthm}
+- \usepackage{tabu}
+- \newcommand{\E}{\mathbb{E}}
+- \newcommand{\var}{{\rm Var}}
+- \newcommand{\N}{\mathcal{N}}
+output: pdf_document
+title: "Homework 3"
+author: "Heyu Zhang"
+---
+
+\noindent \begin{tabu} to \textwidth {@{}X[4 l] @{}X[r]}
+  \textbf{MFE409 Financial Risk Management}   & \\ 
+  \textbf{Valentin Haddad}         & 
+\end{tabu}
+
+
+
+### Question 1
+
+
+1.
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+setwd("/Users/auroracappadocian/Downloads/409FRM/HW3")
+suppressMessages(require(data.table))
+suppressMessages(require(lubridate))
+suppressMessages(require(zoo))
+suppressMessages(require(ggplot2))
+suppressMessages(require(dplyr))
+suppressMessages(library(knitr))
+suppressMessages(require(quantmod))
+returns_data <- as.data.table(read.csv("hw3_returns2.csv"))
+returns_data[,Date:=mdy(Date)]
+rollingWindow <- 252
+c <- 0.99
+lambda  <- 0.995
+cal_hist_VaR <- function(return, c){
+  sorted_ret <- sort(return)
+  Var_point <- ceiling(length(sorted_ret) * (1-c))
+  var <- sorted_ret[Var_point]
+  return(var)
+}
+cal_exponential_VaR <- function(return, c){
+  n <- length(return)
+  weight <- lambda^seq((n-1), 0, -1) * (1-lambda)/(1-lambda^n)
+  df <- cbind(weight, return)
+  df_sorted <- df[order(return),]
+  df_sorted <- cbind(df_sorted, cumsum=cumsum(df_sorted[,1]))
+  pos <- which(df_sorted[,3]>(1-c))[1]
+  return(df_sorted[pos,2])
+}
+
+# calculating historical VaR
+returns_data[, historicalVaR := shift(rollapply(returns_data$Return, rollingWindow, function (return){
+  return(cal_hist_VaR(return,c))
+}, fill=NA, align="right"))
+]
+# calculating exponential Weighted VaR
+returns_data[, exponentialWeightedVaR := shift(rollapply(returns_data$Return, rollingWindow, function(return){
+  return(cal_exponential_VaR(return, c))
+}, fill=NA, align="right"))]
+returns_data_2015<- returns_data[Date >= "2015-01-01"]
+plot(x = returns_data_2015$Date, y= returns_data_2015$historicalVaR, type = "l", 
+     main="HistoricalVaRs and ExponentialWeightedVaR", xlab = "Date",
+     ylab= "VaR")
+lines(x= returns_data_2015$Date, y= returns_data_2015$exponentialWeightedVaR, col = "green")
+legend("bottomright",legend=c("Historical","Exponential Weighted"),fill=c("black","green"), cex = 0.8)
+```
+The plot of two VaR is shown above.   
+   
+
+2.
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+data1<-returns_data[Date > "2014-12-31"]
+n=length(data1$Date)
+m1=sum(data1$Return < (data1$historicalVaR))
+m2=sum(data1$Return < (data1$exponentialWeightedVaR))
+testVal1 <- -2*log(c^(n-m1)*(1-c)^m1)+2*log((1-(m1/n))^(n-m1)*(m1/n)^m1)
+testVal2 <- -2*log(c^(n-m2)*(1-c)^m2)+2*log((1-(m2/n))^(n-m2)*(m2/n)^m2)
+chisq_val <- qchisq(p=c,df=1)
+backtest=c(testVal1,testVal2,chisq_val)
+names(backtest) <- c("Test Val_histVaR","Test Val_expVaR Val","Chisq Val")
+exception=c(m1,m2)
+names(exception) <- c("Exceptions of histVaR","Exceptions of expVaR Val")
+print(backtest)
+print(exception)
+```
+
+For Historical method, there are 14 exceptions. For exponentialweighted method, there are 12 exceptions. Both of them are  fine to calculate VaR since the test statistics of them are all within the 1% threshold 6.63.    
+     
+3.
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+# calculating exponential Weighted VaR using normalized return
+rollingWindow <- 252
+lambda <- 0.995
+rolling_win <- 20
+returns_data[, `:=`(volatility = shift(rollapply(returns_data$Return, rolling_win, sd ,fill=NA, align="right")), mean = shift(rollapply(returns_data$Return,rolling_win, mean ,fill=NA, align="right")))]
+returns_data[,normalized:= (Return - mean)/volatility]
+returns_data_2015<- returns_data[Date > "2014-12-31"]
+plot(x = returns_data_2015$Date, y= returns_data_2015$normalized, type = "l", 
+     main="Normalized Gains using prev. volatility vs. Original Gains", xlab = "Date",
+     ylab= "Stock Return")
+lines(x= returns_data_2015$Date, y= returns_data_2015$Return, col = "green")
+legend("bottomright",legend=c("Normalized Return","Original Return"),fill=c("black","green"), cex = 0.8)
+
+hist(returns_data_2015$normalized,breaks=100,col=scales::alpha("yellow",0.5),xlim=c(-5,5),ylim=c(0,80),xlab='Gain',main='Normalized Gains using prev. volatility vs. Original Gains')
+hist(returns_data_2015$Return,breaks=100,add=TRUE,col=scales::alpha("blue",0.5),xlim=c(-5,5),ylim=c(0,80))
+legend("bottomright",legend=c("Original","Normalized"),fill=c("black","yellow"), cex = 0.8)
+```
+The Distribution is shown above.    
+    
+4.
+I  will use the normalized Return based on the last month volatility and exponetial weighted method to calculate the VaR.
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+rollingWindow <- 252
+lambda <- 0.995
+returns_data[, exponentialWeighted_NormVaR := shift(rollapply(returns_data$normalized, rollingWindow, function(return){
+  cal_exponential_VaR(return, c)
+}, fill=NA, align="right"))]
+data1<-returns_data[Date > "2014-12-31"]
+m3=sum(data1$normalized < (data1$exponentialWeighted_NormVaR))
+testVal3 <- -2*log(c^(n-m3)*(1-c)^m3)+2*log((1-(m3/n))^(n-m3)*(m3/n)^m3)
+chisq_val <- qchisq(p=c,df=1)
+backtest=c(testVal1,testVal2,testVal3,chisq_val)
+names(backtest) <- c("Test Val_histVaR","Test Val_expVaR Val","Test Val_NormVaR Val","Chisq Val")
+exception=c(m1,m2,m3)
+names(exception) <- c("Exceptions of histVaR","Exceptions of expVaR Val","Exceptions of NormVaR Val")
+print(backtest)
+print(exception)
+```
+There are 8 exceptions in the new method.     
+      
+5.   
+There are 748 data entries from 2015 to 2017. By taking 99% VaR on these observation, we will see 8 exceptions. Hence I would suggest to use the method in question4.
+
+### Question 2
+
+1. 
+We can use the proof by contradiction. If at most 2 people were born in the same year, for 3 years, there will be at most 6 people. However, there are 8 people. Hence at least 3 of them are born within the same one-year period.    
+2.
+Assume Normal distribution
+
+$$VaR_{5} = \sigma_{5}\Phi^{-1}(0.98) = 10$$
+$$\sigma_{5} = 10/\Phi^{-1}(0.98) = 4.869144$$
+$$\sigma_{10} = \sigma_{5} \sqrt2$$
+Hence$$VaR_{10} = \sigma_{10}\Phi^{-1}(0.99) = \sigma_5 \sqrt2 \Phi^{-1}(0.99) =  16.01925$$
+3.   
+In other other words, we want to calculate the probability of having more than one exception within 21 consecutive days. n is the number of exceptions within the 21 consecutive days.    
+$$n\sim Bernoulli(21, 1-c)$$
+$$P(n>1)=1-P(n=0)-P(n=1)=1-C_{21}^0(1-c)^{21}-C_{21}^1(1-c)^{20}c^{1}$$
+For bunching test, we can calculate the probability of $P(n>1)$ for each day in a rolling window of 21.    
+   
+4.
+We can use VIX to calculate the volatility of return of S&P500 $\sigma$. We use the mean of previous 1 year return $\mu$. Then the 2-day 99% VaR will be
+$$VaR=-1(\mu + \sqrt{2}\sigma z(1-c))$$
