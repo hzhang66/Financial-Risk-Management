@@ -1,0 +1,114 @@
+---
+header-includes:
+- \usepackage{amssymb, amsmath, amsthm}
+- \usepackage{tabu}
+- \newcommand{\E}{\mathbb{E}}
+- \newcommand{\var}{{\rm Var}}
+- \newcommand{\N}{\mathcal{N}}
+output: pdf_document
+title: "Homework 1"
+author: "Heyu Zhang"
+---
+
+\noindent \begin{tabu} to \textwidth {@{}X[4 l] @{}X[r]}
+  \textbf{MFE409 Financial Risk Management}   & \\ 
+  \textbf{Valentin Haddad}         & 
+\end{tabu}
+
+
+
+### Question 1
+
+
+1. 
+According to VaR defination:$$prob(w < W_0 - VaR_1) = 1 - c$$  
+$$prob(w < W_0 - VaR_1) = F(W_0 - VaR_1)=1-e^{-\lambda (W_0 - VaR_1)}$$
+Since $$E[x]=\frac{1}{\lambda }=W_0$$
+We have $$\lambda =\frac{1}{W_0}$$
+Hence: $$1-c=F(W_0 - VaR_1)=1-e^{-\frac{(W_0 - VaR_1)}{W_0 }}$$  
+$$VaR_1=W_0+W_0ln(c)$$
+Apply with $W0 = 100$ and $c = 99%$
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+VaR1=100+100*log(0.99)
+VaR1
+```
+Value at Risk is 98.99
+         
+2. 
+Defination:$$prob(w > W_0 + VaR_2) = 1 - c$$  
+$$prob(w > W_0 + VaR_2) = 1-F(W_0 + VaR_2)=1-(1-e^{-\frac{(W_0 + VaR_2)}{W_0 }})=1-c$$
+Hence $$VaR_2=-W_0-W_0ln(1-c)$$
+
+Apply with $W0 = 100$ and $c = 99%$
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+VaR2=-100-100*log(1-0.99)
+VaR2
+```
+Value at Risk of shorting is 360.517.  
+
+3.  
+Since the exponential distribution is not as symmetric as normal distribution, we can find that the value at risk of longing and shorting is not the same.
+
+### Question 2
+
+1.
+W0=$1billion
+From partner's view, 
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+VaR1=-1*qnorm((1-0.99), mean=0.07, sd=0.1)
+VaR1
+```
+VaR is $0.1626348 billion.  
+  
+From my view, 
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+VaR2=-1*qnorm((1-0.99), mean=0.07, sd=0.15)
+VaR2
+```
+VaR is $0.2789522 billion.   
+  
+Common view:
+Combining the two distribution
+$$\sigma^\star = \sqrt{\pi^2\sigma_1^2 + (1-\pi)^2\sigma_2^2 + 2\pi(1-\pi)\sigma_1\sigma_2}=\pi\sigma_1+(1-\pi)\sigma_2$$
+
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+sd3=0.6*0.1+0.4*0.15
+VaR3=-1*qnorm((1-0.99), mean=0.07, sd=sd3)
+VaR3
+```
+VaR is $0.2091617 billion. 
+From common view, we have a new distribution to derive VaR. The new value of VaR is between both my view and my partner's view.
+
+2.  
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+pi= seq(0,1,0.01)
+sd_pi=(pi*0.1)+(1-pi)*0.15
+VaR_pi=-1*qnorm((1-0.99), mean=0.07, sd=sd_pi)
+plot(pi, VaR_pi)
+```
+
+There is a linear relationship between pi and weighted VaR. As pi increases, VaR is decreasing.
+
+3.  
+The function VaR_gamma below is to calculate VaR based on the sigma following Gamma(alpha, beta) distribution.
+First, I generate 10000 sigma values from Gamma(alpha, beta) distribution.   
+Second, for each $sigma_i$, I generate 10000 return values from N(mu,$sigma_i$) distribution.   
+Third, I sort these 100,000,000 return values in a accending order.   
+Forth, I find the 1-c quantile value of return to calculate VaR.  
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+VaR_gamma<-function(w0,alpha, beta, c, mu){
+  sigma=rgamma(10000,alpha,beta)
+  return=c()
+  for (i in 1:10000){
+    return=c(return,rnorm(10000,mean=mu,sd=sigma[i]))
+  }
+  return<-sort(return, decreasing = FALSE)
+  VaR_gamma=-w0*return[(1-c)*length(return)]
+}
+```
+
+
+
+
+
+
