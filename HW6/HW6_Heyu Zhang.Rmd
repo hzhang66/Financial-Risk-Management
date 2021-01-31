@@ -1,0 +1,216 @@
+---
+title: "Risk Management Homework 6"
+author: "Heyu Zhang"
+output: pdf_document
+---
+# Question 1
+## BNP
+### Credit Risk and Counterparty Risk
+Credit risk is the risk of incurring an economic loss on loans and receivables existing or potential due to commitments given resulting from change in the credit quality of the Banks debtors which can ultimately result in default. Credit risk is measured at portfolio level taking into account correlations between the values of the loans and receivables making up the portfolio concerned. 
+
+The Basel II standardised method is used based on external ratings. Each transaction and each counterparty is rated by the Group using the same methods regardless of the model used to calculate regulatory capital requirements. Internal estimates of risk parameters are used in the Banks day-to-day management in line with Basel II recommendations For example apart from calculating capital requirements they are used when making new loans or reviewing existing loans to measure profitability determine collective impairment and for internal and external reporting purposes. For colleteral and other security, thebanking regulations set clear guidelines for assessing the risk-mitigating effect of collateral and other security under the Basel II advanced approaches.
+
+In the measurement of counterparty Risk, ValRisk is used to produce the information needed to compute economic capital distribution of potential future exposures on each counterparty and Basel II regulatory capital expected effective positive exposures.The BNP Paribas Group is involved in securitisation transactions as originator sponsor and investor as defined by Basel II. 
+
+
+### Market Risk
+Market risk is the risk of incurring an economic loss of value due to adverse trends in market factors whether directly tradable or not.
+
+The market risk related to banking activities encompasses equity holding risk on the one hand and the interest rate and currency risks stemming from banking intermediation activities on the other hand Only the equity and currency risks give rise to weighted assets calculation under Pillar of Basel II.
+
+The Group uses an internal model derived from the one used to calculate daily VaR GEaR on the trading book. Various types of risk factors are used to measure equity risk and they depend largely on the level of available or useable share price information. The model has been validated by the banking supervisor for measuring the capital requirement for equity risk as part of the Basel II approval process. 
+
+Currency risk relates to all transactions whether part of the trading book or not This risk is treated in the same way under both Basel and Basel II
+
+### Operational Risk
+Operational risk is the risk of incurring an economic loss due to inadequate or failed internal processes or due to external events whether deliberate accidental or natural occurrences Management of operational risk is based on an analysis of the cause event effect chain.
+
+Operational risk management is governed by strict regulatory framework including Basel II which requires the allocation of capital to operational risk
+
+# Question 2
+For this problem, we calculate the lambda for the periods for which the probability is provided.  
+  
+Using the lambda and the formula for probability of default using lambda, we can calculate probability of default at every point there is a cashflow (in this case 0.5,1,1.5,2...,6 years).  
+  
+Once we know probability, we can find present value of the default adjusted cash flows (cash flow * probability). We also need to add the recovery rate in case of default into the price of the bond.  
+  
+Assumed a risk free rate and recovery rate of 0.   
+```{r}
+library(knitr)
+suppressMessages(library(expm))
+#Questions : what is r, what is residual rate
+calculate6yearbondprice <- function(lambda,coupon,faceVal,r,recovery){
+  couponTime <- seq(0.5,6,0.5)
+  lambdaUse <- c(lambda[1]*0.5,lambda[1],lambda[1]*1.5,lambda[1]*2,lambda[1]*2.5,lambda[1]*3,lambda[1]*3+lambda[2]*0.5,
+                 lambda[1]*3+lambda[2],lambda[1]*3+lambda[2]*1.5,lambda[1]*3+lambda[2]*2,
+                 lambda[1]*3+lambda[2]*2+lambda[3]*0.5,lambda[1]*3+lambda[2]*2+lambda[3],
+                 lambda[1]*3+lambda[2]*2+lambda[3]*1.5,lambda[1]*3+lambda[2]*2+lambda[3]*2)
+  names(lambdaUse) <- couponTime
+  
+  price <- 0
+  for(i in 1:length(lambdaUse)){
+    price <- price + (coupon*exp(-lambdaUse[i])/(1+r)^i)
+    if(i == length(lambdaUse)){
+      price <-  price + (faceVal*exp(-lambdaUse[i])/(1+r)^i)
+    }
+  }
+  
+  price <- price + recovery*faceVal*(1-exp(-lambdaUse[length(lambdaUse)]))
+  price
+}
+  
+cds <- c(0.005,0.006,0.01)
+recovery <- 0.6
+lambda <- c()
+lambda[1] <- cds[1]/(1-recovery)
+lambda3Calc <- function(lambda3,cds,recovery,lambda0){
+  lft <- (cds/(1-recovery))*(((1-exp(-3*lambda0))/lambda0)+((exp(-3*lambda0)*(1-exp(-2*lambda3)))/(lambda3)))
+  rgt <- ((1-exp(-3*lambda0))+(exp(-3*lambda0)*(1-exp(-2*lambda3))))
+  lft-rgt
+}
+lambda5Calc <- function(lambda5,cds,recovery,lambda0,lambda3){
+  lft <- (cds/(1-recovery))*(((1-exp(-3*lambda0))/lambda0)+((exp(-3*lambda0)*(1-exp(-2*lambda3)))/(lambda3))
+                             +((exp(-3*lambda0-2*lambda3)*(1-exp(-5*lambda5)))/(lambda5)))
+  rgt <- ((1-exp(-3*lambda0))+(exp(-3*lambda0)*(1-exp(-2*lambda3))) + (exp(-3*lambda0-2*lambda3)*(1-exp(-5*lambda5))))
+  lft-rgt
+}
+lambda[2] <- uniroot(lambda3Calc,cds=cds[2],recovery=recovery,lambda0=lambda[1], interval = c(-1,1))$root
+lambda[3] <- uniroot(lambda5Calc,cds=cds[3],recovery=recovery,lambda0=lambda[1], lambda3 = lambda[2], interval = c(-1,1))$root
+kable(t(lambda),col.names=c(3,5,10),caption="Lambdas")
+coupon <- 3
+faceVal <- 100
+r <- 0
+recovery <- 0.6
+price <- calculate6yearbondprice(lambda,coupon,faceVal,r,recovery)
+kable(t(price),col.names = "Price")
+```
+
+# Question 3
+  These two estimates of the probability of default are so different. The table also shows that the ratio of the implied hazard rate to historicak default rate decreases as the credit quality declines. However, the difference between these two rates increases as credit quality declines. The reason is that bond traders do not base their prices for bonds only on the actuarial probability of default. They build in an extra return to compensate for the risks they are bearing. The historical hazard rate is the real word default probability. The implied hazard rate is the risk neutral default probability. Real-world default probabilities are usually less than risk-neutral default probabilities. This means that bond traders earn more than the risk-free rate on average from holding corporate bonds. Investors always expect significantly higher returns from investing in corporate bonds than from investing in risk-free bonds. As the credit rating of the corporate bonds declined, the extent of the higher returns increased.
+
+# Question4
+
+## 1
+### a
+For P(0), each element is the probability of being in category j at time 0, given that it was in category i at time 0. So in this case we will have 1 along the diagonals (Identity matrix)
+```{r}
+creditRat <- c("AAA","AA","A","BBB","BB","B","CCC","Default")
+P <- matrix(0,nrow = 8, ncol=8,dimnames=list(creditRat,creditRat))
+for(i in 1:nrow(P)){P[i,i] <- 1}
+kable(P)
+```
+
+### b
+This will be the transition matrix as provided in the slides. The last row is for default which has 0 for all transition to other ratings and 100\% for transition to default.
+```{r}
+setwd("/Users/auroracappadocian/Downloads/409FRM/HW6")
+P1 <- read.csv("Transition.csv",header=F)
+colnames(P1) <- creditRat
+row.names(P1) <- creditRat
+kable(P1)
+```
+
+## 2
+IF $\Lambda$ contains ${\lambda}_{i,j}$, such that ${\lambda}_{i,j}$ dt is the probability of moving from category i to category j in dt.
+P(t) is the transitional probability from time 0 to t. As it is a markov chain, when we move from t to t+$\Delta t$, we need only P(t) for calculation of P(t+$\Delta t$)
+
+Imagine the first row of the P(1) matrix, which indicates the probability of moving from AAA to various credit ratings. Imagine we want the first element of P(2), which is probability of it moving from AAA at t=0 to AAA at t=2. For this we can take the first row of P(1) and multiply the first column of $\Lambda$ (which indicates instantaneous probability of moving from one rating to AAA).  
+  
+This shows us that P(t) $\Lambda$ (Matrix multiplication) = P(t + $\Delta t$)   
+
+
+P(t+$\Delta t$) = P(t) $\Lambda \Delta t$   
+  
+$\Lambda \Delta t$ = $P(t)^{-1} P(t + \Delta t)$ = $P(t)^{-1}(\Delta P(t) + P(t))$  
+  
+$\Lambda$ = $(P(t)^{-1} \Delta P(t) + I) \frac{1}{\Delta t}$ = $\mathbf{({P(t)}^{-1} dP(t) + I) \frac{1}{dt}}$    
+     
+## 3
+We know P(0) is Identity matrix (I)
+$\Lambda$ = $I^{-1}$(P(1)-I) + I = **P(1)**
+
+## 4
+$\Lambda$ based on data is P(1)
+```{r}
+Lambda <- as.matrix(P1/100)
+kable(Lambda)
+```
+
+## 5
+The default probabilites for each year, can be calculated by performing $\Lambda^n$ and taking the last column.  
+```{r}
+timevals <- c(1,2,3,4,5,7,10)
+q5 <- sapply(timevals,function(x){(Lambda%^%(x))[c(1:7),8]*100})
+colnames(q5) <- timevals
+row.names(q5) <- creditRat[c(1:7)]
+kable(q5)
+```
+
+## 6
+The difference in the numbers might be because Moody's might not assuming a Markov process, while transitioning from one year to another. That is an important assumption in the method we have provided.  
+
+## 7  
+Price of the BBB bond can be calculated using similar methodology as the first question. Before that we need to calculate the lambda using the default probabilities and use those for the calculations.    
+```{r}
+calculateLambda <- function(conditionalDefault,t){
+  vt <- 1-conditionalDefault
+  integrallamb <- -log(vt)
+  nmr <- diff(integrallamb)
+  dnr <- diff(t)
+  lambda <- nmr/dnr
+  names(lambda) <- t[-length(t)]
+  return(lambda)
+}
+calculate6yearbondprice_2 <- function(lambda,coupon,faceVal,r,recovery){
+  couponTime <- seq(0.5,6,0.5)
+  lambdaUse <- c(lambda[1]*0.5,lambda[1],lambda[1]+lambda[2]*0.5,lambda[1]+lambda[2],lambda[1]+lambda[2] + lambda[3]*0.5,
+                 lambda[1]+lambda[2]+lambda[3],lambda[1]+lambda[2]+lambda[3]+0.5*lambda[4],lambda[1]+lambda[2]+lambda[3]+lambda[4],
+                 lambda[1]+lambda[2]+lambda[3]+lambda[4]+0.5*lambda[5],lambda[1]+lambda[2]+lambda[3]+lambda[4]+lambda[5],
+                 lambda[1]+lambda[2]+lambda[3]+lambda[4]+lambda[5]+0.5*lambda[6],
+                 lambda[1]+lambda[2]+lambda[3]+lambda[4]+lambda[5]+lambda[6],
+                 lambda[1]+lambda[2]+lambda[3]+lambda[4]+lambda[5]+1.5*lambda[6],
+                 lambda[1]+lambda[2]+lambda[3]+lambda[4]+lambda[5]+2*lambda[6])
+  names(lambdaUse) <- couponTime
+  
+  price <- 0
+  for(i in 1:length(lambdaUse)){
+    price <- price + (coupon*exp(-lambdaUse[i])/(1+r)^i)
+    if(i == length(lambdaUse)){
+      price <-  price + (faceVal*exp(-lambdaUse[i])/(1+r)^i)
+    }
+  }
+  
+  price <- price + recovery*faceVal*(1-exp(-lambdaUse[length(lambdaUse)]))
+  price
+}
+  
+BBBDef <- c(0,q5[4,]/100)
+t <- c(0,1,2,3,4,5,7,10)
+lambdas7 <- calculateLambda(BBBDef,t)
+pricebbb <- calculate6yearbondprice(lambdas7,3/2,100,0,0.6)
+kable(t(pricebbb),col.names = "Price")
+```
+
+##8  
+  
+The CDS spread can be calculated using the relation between $\lambda$ s and recovery rate as provided in the slides. The complete formula has been used for these calculations.  
+
+```{r}
+cds <- c()
+recovery <- 0.6
+nmtr_3 <- ((1-exp(-lambdas7[1])) + exp(-lambdas7[1])*(1-exp(-lambdas7[2])) + exp(-lambdas7[1]-lambdas7[2])*(1-exp(-lambdas7[3])))
+dmtr_3 <- ((1-exp(-lambdas7[1]))/lambdas7[1] + exp(-lambdas7[1])*(1-exp(-lambdas7[2]))/lambdas7[2] +
+             exp(-lambdas7[1]-lambdas7[2])*(1-exp(-lambdas7[3]))/lambdas7[3])
+cds[1] <- nmtr_3*(1-recovery)/dmtr_3
+nmtr_5 <- nmtr_3 + exp(-lambdas7[1]-lambdas7[2]-lambdas7[3])*(1-exp(-lambdas7[4])) +
+          exp(-lambdas7[1]-lambdas7[2]-lambdas7[3]-lambdas7[4])*(1-exp(-lambdas7[5]))           
+dmtr_5 <- dmtr_3 + exp(-lambdas7[1]-lambdas7[2]-lambdas7[3])*(1-exp(-lambdas7[4]))/lambdas7[4] +
+          exp(-lambdas7[1]-lambdas7[2]-lambdas7[3]-lambdas7[4])*(1-exp(-lambdas7[5]))/lambdas7[5]
+cds[2] <- nmtr_5*(1-recovery)/dmtr_5
+nmtr_10 <- nmtr_5 + exp(-lambdas7[1]-lambdas7[2]-lambdas7[3]-lambdas7[4]-lambdas7[5]-2*lambdas7[6])*(1-exp(-3*lambdas7[7]))
+dmtr_10 <- dmtr_5 + exp(-lambdas7[1]-lambdas7[2]-lambdas7[3]-lambdas7[4]-lambdas7[5]-2*lambdas7[6])*(1-exp(-3*lambdas7[7]))/lambdas7[7]
+cds[3] <- nmtr_10*(1-recovery)/dmtr_10
+names(cds) <- c(3,5,10)
+kable(t(cds))
+```
+
