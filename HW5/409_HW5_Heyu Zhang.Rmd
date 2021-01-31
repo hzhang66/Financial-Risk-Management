@@ -1,0 +1,277 @@
+---
+header-includes:
+- \usepackage{amssymb, amsmath, amsthm}
+- \usepackage{tabu}
+- \newcommand{\E}{\mathbb{E}}
+- \newcommand{\var}{{\rm Var}}
+- \newcommand{\N}{\mathcal{N}}
+output: pdf_document
+title: "Homework 5"
+author: "Heyu Zhang"
+---
+
+\noindent \begin{tabu} to \textwidth {@{}X[4 l] @{}X[r]}
+  \textbf{MFE409 Financial Risk Management}   & \\ 
+  \textbf{Valentin Haddad}         & 
+\end{tabu}
+
+
+
+#Question 1
+The change in value of the option can be shown as a change in price of stock multiplied by its delta (using taylor's series)  
+  
+$$M_{t+1} - M_t = {\Delta}_{1} dS_1  + {\Delta}_{2} dS_2$$  
+  
+ $$={\Delta}_{1} ({\mu}_1 S_{1} dt + {\sigma}_1 S_{1} dW_{t1})  + {\Delta}_{2} ({\mu}_2 S_{2} dt + {\sigma}_2 S_{2} dW_{t2})$$   
+ $$=({\Delta}_1 {\mu}_1 S_1 +  {\Delta}_2 {\mu}_2 S_2)dt + ({\Delta}_1 {\sigma_1} S_1 dW_{t1} + {\Delta}_2 {\sigma_2} S_2 dW_{t2})$$  
+  
+So the dt term is the ${\mu}_c$ and the  ${\sigma}_c$ is the combined standard deviation of the two $dW_t$ terms.
+  
+$$VaR = -{\mu}_c + 2.326 {\sigma}_c$$   
+ 
+$$= \mathbf{-({\Delta}_{1} {\mu}_1 S_{t,1} + {\Delta}_{2} {\mu}_2 S_{t,2}) + 2.326(\sqrt{{{{\Delta}^2}_1} {{S^2}_{t,1}} {{\sigma}^2}_1 + {{{\Delta}^2}_2} {{S^2}_{t,2}} {{\sigma}_1}^2 + 2 {\Delta}_1 {\Delta}_2 {\sigma}_1 {\sigma}_2 S_1 S_2 \rho})}$$
+
+
+#Question 2
+
+For the delta gamma method, we need to introduce more terms from the taylor's expansion. These terms will include the gamma of the stocks  
+  
+$$M_{t+1} - M_t = {\Delta}_{1} dS_1  + {\Delta}_{2} dS_2 + \frac{1}{2} {\gamma}_1 {dS_1}^2 + \frac{1}{2} {\gamma}_2 {dS_2}^2 + {\gamma}_{1,2} {dS_1}{dS_2}$$  
+  
+$$= ({\Delta}_1 {\mu}_1 S_1 +  {\Delta}_2 {\mu}_2 S_2)dt + ({\Delta}_1 {\sigma_1} S_1 dW_{t1} + {\Delta}_2 {\sigma_2} S_2 dW_{t2}) + \frac{1}{2} {\gamma}_1 {{\sigma}_1}^2 {S_1}^2 dt + \frac{1}{2} {\gamma}_2 {{\sigma}_2}^2 {S_2}^2 dt + {\gamma}_{1,2} S_1 S_2 {\sigma}_1 {\sigma}_2 \rho dt$$  
+  
+$$= ({\Delta}_1 {\mu}_1 S_1 +  {\Delta}_2 {\mu}_2 S_2 + \frac{1}{2} {\gamma}_1 {{\sigma}_1}^2 {S_1}^2 + \frac{1}{2} {\gamma}_2 {{\sigma}_2}^2 {S_2}^2 + {\gamma}_{1,2} S_1 S_2 {\sigma}_1 {\sigma}_2 \rho)dt +({\Delta}_1 {\sigma_1} S_1 dW_{t1} + {\Delta}_2 {\sigma_2} S_2 dW_{t2})$$
+
+So the dt term is the ${\mu}_c$ and the  ${\sigma}_c$ is the combined standard deviation of the two $dW_t$ terms.
+  
+$$VaR = -{\mu}_c + 2.326 {\sigma}_c$$   
+ 
+$$= \mathbf{-({\Delta}_1 {\mu}_1 S_1 +  {\Delta}_2 {\mu}_2 S_2 + \frac{1}{2} {\gamma}_1 {{\sigma}_1}^2 {S_1}^2 + \frac{1}{2} {\gamma}_2 {{\sigma}_2}^2 {S_2}^2 + {\gamma}_{1,2} S_1 S_2 {\sigma}_1 {\sigma}_2 \rho}$$   
+  
+$$+\mathbf{2.326(\sqrt{{{{\Delta}^2}_1} {{S^2}_{t,1}} {{\sigma}^2}_1 + {{{\Delta}^2}_2} {{S^2}_{t,2}} {{\sigma}_1}^2 + 2 {\Delta}_1 {\Delta}_2 {\sigma}_1 {\sigma}_2 S_1 S_2 \rho})})$$
+
+
+#Question 3
+The price of the option can be calculated by using the closed form solution provided in the question. All the values are annualized while using the closed form solution.  The price of the option at t=0 is
+
+```{r echo=FALSE}
+library(mvtnorm)
+library(pbivnorm)
+library(knitr)
+OptionPrice <- function(S1,S2,K,mu1,mu2,sigma1,sigma2,rho,r,t){
+  gamma1 <- (log(S1/K) + (r - (sigma1^2)/2)*t)/(sigma1 * sqrt(t))
+  gamma2 <- (log(S2/K) + (r - (sigma2^2)/2)*t)/(sigma2 * sqrt(t)) 
+  sigmaSq <- sigma1^2 + sigma2^2 - 2 * rho * sigma1 * sigma2
+  
+  
+  temp1.a <- gamma1 + sigma1*sqrt(t)
+  temp2.a <- (log(S2/S1) - 0.5 * sigmaSq * sqrt(t))/(sqrt(sigmaSq) * sqrt(t))
+  temp3.a <- ((rho * sigma2) - sigma1)/sqrt(sigmaSq)
+  
+  temp1.b <- gamma2 + sigma2*sqrt(t)
+  temp2.b <- (log(S1/S2) - 0.5 * sigmaSq * sqrt(t))/(sqrt(sigmaSq) * sqrt(t))
+  temp3.b <- ((rho * sigma1) - sigma2)/sqrt(sigmaSq)
+  
+  corr.a <- diag(1,2)
+  corr.a[lower.tri(corr.a)] <- temp3.a
+  corr.a[upper.tri(corr.a)] <- temp3.a
+  term1 <- rep(NA,length(temp1.a))
+  for(i  in 1:length(temp1.a)){
+    term1[i] <- S1[i] * pmvnorm(upper=c(temp1.a[i],temp2.a[i]), corr = corr.a)[1]
+  }
+  
+  corr.b <- diag(1,2)
+  corr.b[lower.tri(corr.b)] <- temp3.b
+  corr.b[upper.tri(corr.b)] <- temp3.b
+  term2 <- rep(NA,length(temp2.a))
+  for(i  in 1:length(temp1.b)){
+    term2[i] <- S2[i] * pmvnorm(upper=c(temp1.b[i],temp2.b[i]), corr = corr.b)[1]
+  }
+  
+  corr.c <- diag(1,2)
+  corr.c[lower.tri(corr.c)] <- rho
+  corr.c[upper.tri(corr.c)] <- rho
+  term3 <- rep(NA,length(gamma1))
+  for(i  in 1:length(gamma1)){
+    term3[i] <- K * exp(-1.0 * r * t) * pbivnorm(cbind(gamma1[i],gamma2[i]),rho = rho)
+  }
+  return(term1 + term2 - term3)
+}
+r <- 0.00005*252
+sigma1 <- 0.02*sqrt(252)
+sigma2 <- 0.02*sqrt(252)
+t <- 0.5
+S1 <- 99
+S2 <- 101
+K <- 100
+rho <- 0.4
+mu1 <- 0.0003*252
+mu2 <- 0.0003*252
+pricet0 <- OptionPrice(S1,S2,K, mu1, mu2, sigma1, sigma2, rho, r, t)
+pricet0
+```
+
+#Question 4  
+  
+The formula from question 1 and question 2 contain delta and gamma terms. this can be calculated by checking how the price of the option and the delta changes by increasing the stock price by 0.01. The cross gamma is calculated by increasing both the stock prices by 0.01 simultaneously.  
+  
+The option price from both the methods are as follows:  
+_Delta Approach_  
+```{r echo=FALSE}
+optionVaR <- function(S1,S2,K,mu1,mu2,sigma1,sigma2,rho,r,t){
+   C_0 <- OptionPrice(S1 ,S2, K, mu1, mu2, sigma1, sigma2, rho, r, t)
+  
+  #delta1
+  C_1 <- OptionPrice(S1+0.01 ,S2, K, mu1, mu2, sigma1, sigma2, rho, r, t)
+  delta.1 <- (C_1 - C_0)/0.01
+  
+  #delta2
+  C_2 <- OptionPrice(S1 ,S2+0.01, K, mu1, mu2, sigma1, sigma2, rho, r, t)
+  delta.2 <- (C_2 - C_0)/0.01
+  
+  optionExp <- delta.1 * S1 * (mu1/252) + delta.2 *S2 * (mu2/252)
+  OptionSd <- sqrt(delta.1^2 * S1^2 * ((sigma1^2)/252) + delta.2^2 * S1^2 * ((sigma2^2)/252) + (2*delta.1*delta.2*S1*S2*sigma1*sigma2*rho/252))
+  VaRRet <- (-optionExp - (qnorm(0.01) * OptionSd))/C_0
+  
+  return(VaRRet)
+}
+optionVaR_Gamma <- function(S1,S2,K,mu1,mu2,sigma1,sigma2,rho,r,t){
+   C_0 <- OptionPrice(S1 ,S2, K, mu1, mu2, sigma1, sigma2, rho, r, t)
+  
+  #gamma1
+  C_1_a <- OptionPrice(S1+0.01 ,S2, K, mu1, mu2, sigma1, sigma2, rho, r, t)
+  delta.1_a <- (C_1_a - C_0)/0.01
+  C_1_b <- OptionPrice(S1+0.02 ,S2, K, mu1, mu2, sigma1, sigma2, rho, r, t)
+  delta.1_b <- (C_1_b - C_1_a)/0.01
+  gamma.1 <- (delta.1_b - delta.1_a)/0.01
+  
+  #gamma2
+  C_2_a <- OptionPrice(S1 ,S2+0.01, K, mu1, mu2, sigma1, sigma2, rho, r, t)
+  delta.2_a <- (C_2_a - C_0)/0.01
+  C_2_b <- OptionPrice(S1 ,S2+0.02, K, mu1, mu2, sigma1, sigma2, rho, r, t)
+  delta.2_b <- (C_2_b - C_2_a)/0.01
+  gamma.2 <- (delta.2_b - delta.2_a)/0.01
+  
+  #gamma12
+  C_12_both_add <- OptionPrice(S1+0.01, S2+0.01, K, mu1, mu2, sigma1, sigma2, rho, r, t)
+  C_12_both_minus <- OptionPrice(S1-0.01, S2-0.01, K, mu1, mu2, sigma1, sigma2, rho, r, t)
+  C_12_mix_1 <- OptionPrice(S1+0.01, S2-0.01, K, mu1, mu2, sigma1, sigma2, rho, r, t)
+  C_12_mix_2 <- OptionPrice(S1-0.01, S2+0.01, K, mu1, mu2, sigma1, sigma2, rho, r, t)
+  gamma.12 <- (C_12_both_add - C_12_mix_1 -C_12_mix_2 +C_12_both_minus)/(4 * 0.01^2)
+  
+  optionExp <- delta.1_a * S1 * (mu1/252) + delta.2_a *S2 * (mu2/252) + 
+    0.5 * gamma.1 * (sigma1^2/252) * S1^2 + 0.5 * gamma.2 * (sigma2^2/252) * S2^2 + (gamma.12 * S1 * S2 * sigma1 * sigma2 * rho)/252
+  OptionSd <- sqrt(delta.1_a^2 * S1^2 * ((sigma1^2)/252) + delta.2_a^2 * S1^2 * ((sigma2^2)/252) + (2*delta.1_a*delta.2_a*S1*S2*sigma1*sigma2*rho/252))
+  VaRRet <- (-optionExp - (qnorm(0.01) * OptionSd))/C_0
+  
+  return(VaRRet)
+}
+r <- 0.00005*252
+sigma1 <- 0.02*sqrt(252)
+sigma2 <- 0.02*sqrt(252)
+t <- 0.5
+S1 <- 99
+S2 <- 101
+K <- 100
+rho <- 0.4
+mu1 <- 0.0003*252
+mu2 <- 0.0003*252
+var_delta <- optionVaR(S1,S2,K,mu1,mu2,sigma1,sigma2,rho,r,t)
+var_delta
+```
+So the VaR using the delta approach is 47.23\%.  
+
+_Delta Gamma approach_  
+```{r echo=FALSE}
+var_gamma <- optionVaR_Gamma(S1,S2,K,mu1,mu2,sigma1,sigma2,rho,r,t)
+var_gamma
+```
+The VaR using the delta gamma approach is 46\%.
+As can be seen, the VaR due to the Delta gamma approach has reduced compared to the Delta approach. This is because convexity is always helpful and has increased the returns. The delta approach makes a big approximation which can be very wrong as the convexity increases.   
+
+#Question 5
+
+The VaR from simulation can be calculated by finding the price of the option at t=0 and t=1 and then finding the return based on that. For calculating the price of the option at t=1, we need to simulate the price of S1 and S2 at t=1 using the provided stochastic equation. The value of VaR is  
+```{r echo=FALSE}
+set.seed(1234)
+r <- 0.00005*252
+sigma1 <- 0.02*sqrt(252)
+sigma2 <- 0.02*sqrt(252)
+t <- 0.5
+S1 <- 99
+S2 <- 101
+K <- 100
+rho <- 0.4
+mu1 <- 0.0003*252
+mu2 <- 0.0003*252
+N <- 10000
+generateBiVarNormalRandom <- function(rho,n){
+  z <- rnorm(2*n)
+  z1 <- z[1:n]
+  z2 <- z[(n+1):(2*n)]
+  zb <- rho*z1 + sqrt(1-rho^2)*z2
+  data.frame(z1,zb)
+}
+call_ret_sim <- function(S10,S20,mu1,mu2,sigma1,sigma2,rho,t,N,K,r){
+  #randNums <- generateBiVarNormalRandom(rho,N)
+  
+  rand1 <- rnorm(N)
+  rand2 <- rnorm(N)
+  S1 <- S10 * exp((mu1 - (sigma1^2/2)) * (1/252) +  sigma1 * sqrt(1/252) * rand1)
+  S2 <- S20 * exp((mu2 - (sigma2^2/2)) * (1/252) +  sigma2 * sqrt(1/252) * (rho*rand1 + sqrt(1 - rho^2)*rand2))
+  C_0 <- OptionPrice(S10 ,S20, K, mu1, mu2, sigma1, sigma2, rho, r, t)
+  C_1 <- OptionPrice(S1 ,S2, K, mu1, mu2, sigma1, sigma2, rho, r, t - (1/252))
+  
+  (C_1-C_0)/C_0
+}
+ret_sim <- call_ret_sim(S1,S2,mu1,mu2,sigma1,sigma2,rho,t,10000,K,r)
+ret_mean <- mean(ret_sim)
+sd_mean <- sd(ret_sim)
+VarSimulation <- -ret_mean - qnorm(0.01)*sd_mean
+VarSimulation
+```  
+    
+This value of VaR is 48.33\%, which is higher than that produced out of both the Gamma and Delta approaches. This is because simulation considers other types of risks as well (like vega, rho etc.). Due to this the VaR value is greater than others. 
+
+#Question 6
+We would need to worry about the other greeks, for which we have assumed the values are the same. This involves the greeks of Rho (wrt interest rate), theta (wrt time decay) and Vega (wrt sigma). The value of these greeks are as below:    
+
+```{r echo=FALSE}
+r <- 0.00005*252
+sigma1 <- 0.02*sqrt(252)
+sigma2 <- 0.02*sqrt(252)
+t <- 0.5
+S1 <- 99
+S2 <- 101
+K <- 100
+rho <- 0.4
+mu1 <- 0.0003*252
+mu2 <- 0.0003*252
+N <- 10000
+C_0 <- OptionPrice(S1 ,S2, K, mu1, mu2, sigma1, sigma2, rho, r, t)
+C_1_Veg <- OptionPrice(S1 ,S2, K, mu1, mu2, sigma1+0.0001, sigma2, rho, r, t)
+Vega_1 <- (C_1_Veg - C_0)/(0.0001)
+C_2_Veg <- OptionPrice(S1 ,S2, K, mu1, mu2, sigma1, sigma2+0.0001, rho, r, t)
+Vega_2 <- (C_2_Veg - C_0)/(0.0001)
+C_Theta <- OptionPrice(S1 ,S2, K, mu1, mu2, sigma1, sigma2, rho, r, t-(1/252))
+Theta <- (C_Theta - C_0)/(1/252)
+C_Rho <- OptionPrice(S1 ,S2, K, mu1, mu2, sigma1, sigma2, rho, r+0.0001, t)
+Rho <- (C_Rho - C_0)/(0.0001)
+answer <- c(Vega_1,Vega_2,Theta,Rho)
+names(answer) <- c("Vega1","Vega2","Theta","Rho")
+kable(t(answer))
+```
+  
+In Option trading, one of the most important greek is the vega. Volatility is an important input into the black scholes equation and how option price changes with change in volatility is a key risk which needs to be considered.  
+
+#Interview Questions
+##Question 1
+Assume the ball's radius is r. Then the distance between the center of the ball and the corner on the floor is $\sqrt{3}r$
+
+##Question 2
+The forward  price will be the present price of the stock.
+
+
+##Question 3  
+Split the coins to 2 piles. One pile contains 10 coins and the other contains 47 coins. Flip up every coin in the 10-coin pile then we will get what we want.    
+Reason: assume that there are x white-up coins in the 10-coin pile. Then there will be (10-x) white-up coins in the 47-coin pile. After flipping up the coins, there will be (10-x) white-up coins in the 10-coin pile which is the same as the 47-coin pile.
