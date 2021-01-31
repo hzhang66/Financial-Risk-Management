@@ -1,0 +1,218 @@
+---
+header-includes:
+- \usepackage{amssymb, amsmath, amsthm}
+- \usepackage{tabu}
+- \newcommand{\E}{\mathbb{E}}
+- \newcommand{\var}{{\rm Var}}
+- \newcommand{\N}{\mathcal{N}}
+output: pdf_document
+title: "Homework 2"
+author: "Heyu Zhang"
+---
+
+\noindent \begin{tabu} to \textwidth {@{}X[4 l] @{}X[r]}
+  \textbf{MFE409 Financial Risk Management}   & \\ 
+  \textbf{Valentin Haddad}         & 
+\end{tabu}
+
+
+
+### Question 1
+
+
+1.       
+We are Group 9. The Bank of our group is BNP Paribas.
+* Technique used to compute VaR   
+The model is based on changes in the market over the previous 260 days with confidence level of 99%.   
+The incorporation of typical risk factors interest rates credit spreads exchange rates securities prices commodities prices and the corresponding volatility.The incorporation of correlations between risk factors in order to account for the knock-on effects of risk diversification.   
+* What data is used to compuate VaR? Is more recent data weighted more heavily?   
+The model is based on historical changes in the market over the previous 260 days coming from the Fixed income and equities team.     
+* Time horizon      
+The horizon is 10 days or 1 day.    
+* Confidence level      
+The model is based on a Confidence level of 99%.    
+* Number of VaR exceptions in 2008 (days where loss exceeded VaR)      
+Daily losses exceeded VaR seven times in 2008 reflecting unprecedented shocks and exceptionally high
+volatility in the financial markets.   
+* Any changes to VaR methodology made as a result of the financial crisis?     
+GRM continuously tests the accuracy of its model through variety of techniques including regular comparison over long-term horizon between actual daily losses on capital market transactions and 1-
+day VaR. VaR calculation methods are continually being improved to factor in new risks arising from changes in the structure of financial markets and products. After comparing the annual report of 2007 and 2008, in 2008 they include more stress testing to calculate the sensitivity due to extreme economic condition.     
+
+2. 
+(a)
+```{r echo=TRUE,results =FALSE, fig.align='center'}
+library(data.table) 
+library(ggplot2)
+library(foreign) 
+suppressMessages(library(lubridate))
+suppressMessages(library(quantmod))
+library(knitr)
+library(readr)
+suppressMessages(library(PerformanceAnalytics))
+```
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+suppressMessages(BNP <- as.data.table(read_csv("~/Downloads/409FRM/HW2/BNPQY.csv")))
+Dealingdata <- function(Raw){
+  Raw <- Raw[, lagP:=c(NA,Raw$`Adj Close`)[1:length(Raw$`Adj Close`)]]
+  Raw <- Raw[, Ret:=(`Adj Close`-lagP)/lagP]
+  Raw <- Raw[Ret!="NA"]
+  Raw_ret<-Raw[ , .(Date,Ret)]
+  Raw_ret<-Raw[Date >= "2006-01-03"]
+  Raw_ret<-Raw[Date <= "2008-12-29"]
+  return(Raw_ret)
+}
+BNP <- Dealingdata(BNP)
+time<-BNP$Date[]
+Horizon <-BNP[Date >= "2008-01-01"]$Date
+DailyVaR<-function(data,Horizon, c){
+  dailyVaR <- data.frame(Date= Horizon,Ret=BNP[Date >= "2008-01-01"]$Ret)
+  var<-c()
+  for( i in Horizon){
+  historical <- data[Date < i]
+  var<-c(var,quantile(historical$Ret, 1-c))
+  }
+  dailyVaR$Daily_VaR<-abs(var)
+  return(dailyVaR)
+}
+BNP_08VaR<-DailyVaR(BNP,Horizon, 0.99)
+plot(BNP_08VaR$Date, BNP_08VaR$Daily_VaR, xlab="Date", 
+     ylab="Daily VaR",main='BNP Daily VaR in 2008',ylim=c(0,0.1),type='l',col="blue")
+```
+The plot above shows the daily VaR based on the historical data on each day. As what we can see, there is a dramatic jump in the forth quarter. The VaR means the value at risk for each $1 we invest.
+
+(b)   
+To backtest the methodology, we can use a hypothesis test to justify it. The Null Hypothesis is that c is %. We will use the number 'm' of loss exceeding the VaR to calculate the test statistics. 
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+backtest <- function(data,Horizon,c){
+  data08<-DailyVaR(data,Horizon,c)
+  m <- length(data08$Date) - sum(data08$Ret > (-data08$Daily_VaR))
+  n <- length(data08$Date)
+  testVal <- -2*log(c^(n-m)*(1-c)^m)+2*log((1-(m/n))^(n-m)*(m/n)^m)
+  chisq_val <- qchisq(p=c,df=1)
+  result <- c(testVal,chisq_val)
+  names(result) <- c("Test Val","ChiSq Val")
+  return(result)
+}
+backtest(BNP,Horizon, 0.99)
+```
+From the result above, we find the test chi-sqare is 53.649351. the Chi-squared 1% threshold is 6.634897. Hence we reject the null hypothesis that c is 99%. This result might be due to financial crisis when the true volitility is higher than historical volatility.
+
+(c)
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+exception <- function(data,Horizon,c){
+  data08<-DailyVaR(data,Horizon,c)
+  m <- length(data08$Date) - sum(data08$Ret > (-data08$Daily_VaR))
+  return(m)
+}
+exception(BNP,Horizon, 0.99)
+```
+I calculate the number of times when loss exceeding the VaR. There are 21 exceptions based on the historical method. However, there are only 7 exceptions in the BNP Annual Report, which suggest that BNP may adopt a approporiate model to calculate the VaR.   
+    
+3.  
+(a)
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+suppressMessages(BAC <- Dealingdata(as.data.table(read_csv("~/Downloads/409FRM/HW2/BAC.csv"))))
+suppressMessages(BCS <- Dealingdata(as.data.table(read_csv("~/Downloads/409FRM/HW2/BCS.csv"))))
+suppressMessages(C <- Dealingdata(as.data.table(read_csv("~/Downloads/409FRM/HW2/C.csv"))))
+suppressMessages(CS <- Dealingdata(as.data.table(read_csv("~/Downloads/409FRM/HW2/CS.csv"))))
+suppressMessages(DB <- Dealingdata(as.data.table(read_csv("~/Downloads/409FRM/HW2/DB.csv"))))
+suppressMessages(GS <- Dealingdata(as.data.table(read_csv("~/Downloads/409FRM/HW2/GS.csv"))))
+suppressMessages(JPM <- Dealingdata(as.data.table(read_csv("~/Downloads/409FRM/HW2/JPM.csv"))))
+suppressMessages(MS <- Dealingdata(as.data.table(read_csv("~/Downloads/409FRM/HW2/MS.csv"))))
+suppressMessages(UBS <- Dealingdata(as.data.table(read_csv("~/Downloads/409FRM/HW2/UBS.csv"))))
+weight<-c(2,1,2,1,2,1,2,1,2,1)/15
+dataall<-as.matrix(cbind(GS$Ret,UBS$Ret,JPM$Ret,C$Ret,BCS$Ret,MS$Ret,DB$Ret,BAC$Ret,BNP$Ret,CS$Ret))
+BNP$Portfolio=  dataall  %*% weight
+Portfolio=BNP[,.(Date,Portfolio)]
+colnames(Portfolio) <- c('Date', 'Ret')
+Horizon <-BNP[Date >= "2008-01-01"]$Date
+Portfolio_08VaR<-DailyVaR(Portfolio,Horizon, 0.99)
+Portfolio_08VaR$Daily_VaR<-Portfolio_08VaR$Daily_VaR*15000000
+plot(Portfolio_08VaR$Date, Portfolio_08VaR$Daily_VaR, xlab="Date", ylab="Daily VaR",main='Portfolio Daily VaR in 2008',type='l',col="blue")
+VaR_overall<-abs(quantile(Portfolio$Ret, 1-0.99)*15000000)
+print(VaR_overall)
+```
+I construct a portfolio with the weight of $(\frac{2}{15},\frac{1}{15},\frac{2}{15},\frac{1}{15},\frac{2}{15},\frac{1}{15},\frac{2}{15},\frac{1}{15},\frac{2}{15},\frac{1}{15})$ on these 10 firms. Then I use the portfolio return to calculate the overall Value at risk. The Daily VaR of 2008 is shown in the plot above. The value at risk based on all the data from 01/2016 to 12/2018 is $1519559.    
+    
+(b)      
+I calculate the DVaR using the change of portfolio VaR due to $1 change in the position of each firm.   
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+DVaR <- c(rep(0,10))
+dxi=1
+
+for (i in 1:10){
+  amount<-c(2,1,2,1,2,1,2,1,2,1)*1000000
+  amount[i]<-amount[i]+dxi
+  portfolio_ret=dataall  %*% amount
+  DVaR[i]=(abs(quantile(portfolio_ret, 1-0.99))-VaR_overall)/dxi
+}
+amount<-c(2,1,2,1,2,1,2,1,2,1)*1000000
+CVaR=DVaR*amount
+result<-as.matrix(cbind(DVaR,CVaR))
+rownames(result)<-c("GS","UBS","JPM","Citi","BCS","MS","DB","BAC","BNP","CS")
+colnames(result)<-c("DVaR","CVaR")
+print(result)
+print(sum(CVaR))
+```
+The table above shows the result of DVaR and CVaR of each firm. The sum of CVaR is $1519559 the same as the overall Portfolio VaR calculated in 2(a).    
+    
+(c)
+DVaR measure the sensitivity of portfolio VaR due to the position of each firm. CVaR shows the contribution of each firm on the portfolio VaR. From the result above, I find that JPM contribute the most on the portfolio VaR which means that the money Losing in the JPM stock will be the most. I also find the DVaR of BNP is negative, which suggest a negative correlaion between portfolio VaR and the weight on BNP.     
+(d)   
+We can use Risk Adjusted Rate of Return on Capital to find which firm we should tilt on. Risk Adjusted Rate of Return on Capital is kind of lieke a sharpe ratio to measure the performance considering both profit and VaR. I calculate the RAROC of 2006 to 2008 and RAROC of 2008 only since 2008 is a uncommon  year with financial crisis.   
+```{r echo=TRUE,results =TRUE, fig.align='center'}
+data_08<-as.matrix(cbind(GS[Date >= "2008-01-01"]$Ret,UBS[Date >= "2008-01-01"]$Ret,JPM[Date >= "2008-01-01"]$Ret,C[Date >= "2008-01-01"]$Ret,BCS[Date >= "2008-01-01"]$Ret,MS[Date >= "2008-01-01"]$Ret,DB[Date >= "2008-01-01"]$Ret,BAC[Date >= "2008-01-01"]$Ret,BNP[Date >= "2008-01-01"]$Ret,CS[Date >= "2008-01-01"]$Ret))
+RAROC <- as.matrix(c(rep(0,10)))
+RAROC_08 <- as.matrix(c(rep(0,10)))
+amount=c(2,1,2,1,2,1,2,1,2,1)*1000000
+for (i in 1:10){
+  var_i<-abs(quantile(dataall[,i],0.01)*amount[i])
+  profit=amount[i]*mean(dataall[,i])
+  RAROC[i,1]=profit/var_i
+  var_i08<-abs(quantile(data_08[,i],0.01)*amount[i])
+  profit08=amount[i]*mean(data_08[,i])
+  RAROC_08[i,1]=profit08/var_i08
+}
+RAROC<-cbind(RAROC,RAROC_08)
+colnames(RAROC) <- c("RAROC","RAROC_08")
+rownames(RAROC)<- c("GS","UBS","JPM","Citi","BCS","MS","DB","BAC","BNP","CS")
+
+print(RAROC)
+```
+From the table, above, we find that JP Morgan has the highest RAROC based both 2006-2008 data and 2008 data. I think we should put more weight on JPM stock.     
+     
+     
+     
+### Question 2
+
+1.     
+Assume $Gain= W - W_0 \sim N(\mu,\sigma^2)$, Hence, $W\sim N(\mu+W_0,\sigma^2)$
+$$ES = W_0-\frac{\int_{-\infty }^{W_0-VaR}Wf(W)dW}{\int_{-\infty }^{W_0-VaR}f(W)dW}$$ 
+let $y=\frac{W-W_0-\mu}{\sigma} \sim N(0,1)$
+$$W=\sigma y+W_0+\mu$$
+$$f(W)=\frac{1}{\sqrt{2\pi\sigma^2}}exp(-\frac{(W-W_0-\mu)^2}{2\sigma^2})=\frac{1}{\sqrt{2\pi\sigma^2}}exp(-\frac{y^2}{2})$$
+$$dW=\sigma dy$$
+when $W=W_0-VaR$  $$y=\frac{W-W_0-\mu}{\sigma}=\frac{W_0-VaR-W_0-\mu}{\sigma}=\frac{W_0-(z(c)\sigma-\mu)-W_0-\mu}{\sigma}=-z(c)$$
+when $W=-\infty$ , $y=-\infty$
+$$ES = W_0-\frac{\int_{-\infty }^{W_0-VaR}Wf(W)dW}{\int_{-\infty }^{W_0-VaR}f(W)dW}= W_0-\frac{\int_{-\infty }^{-z(c)}(\sigma y+W_0+\mu)(\frac{1}{\sqrt{2\pi\sigma^2}}exp(-\frac{y^2}{2}))\sigma dy}{\int_{-\infty }^{-z(c)}(\frac{1}{\sqrt{2\pi\sigma^2}}exp(-\frac{y^2}{2}))\sigma dy}$$
+$$=W_0-\frac{\int_{-\infty }^{-z(c)}(\sigma y)(\frac{1}{\sqrt{2\pi\sigma^2}}exp(-\frac{y^2}{2}))\sigma dy+\int_{-\infty }^{-z(c)}(W_0+\mu)(\frac{1}{\sqrt{2\pi\sigma^2}}exp(-\frac{y^2}{2}))\sigma dy}{1-c}$$
+$$=W_0-\frac{\frac{\sigma}{\sqrt{2\pi}}\int_{-\infty }^{-z(c)}(exp(-\frac{y^2}{2}))ydy+(W_0+\mu)(1-c)}{1-c}$$
+$$=-\mu-\frac{\frac{\sigma}{\sqrt{2\pi}}\int_{-\infty }^{-z(c)}(exp(-\frac{y^2}{2}))ydy}{1-c}=-\mu-\frac{\sigma\int_{-\infty }^{-z(c)}(exp(-\frac{y^2}{2}))ydy}{\sqrt{2\pi}(1-c)}=-\mu+\frac{\sigma e^{-\frac{z(c)^2}{2}}}{\sqrt{2\pi}(1-c)}$$
+       
+         
+            
+2.Proof:     
+$$ES = W_0-\frac{\int_{-\infty }^{W_0-VaR}Wf(W)dW}{\int_{-\infty }^{W_0-VaR}f(W)dW}$$ 
+Let $F(W)=Prob(X\leq W)=1-\alpha$, where $W  \sim N(\mu+W_0,\sigma^2)$, $VaR_\alpha=W_0-W$, then we have $W=W_0-VaR_\alpha$
+$$d\alpha=-dF(W)=-f(W)dW$$    
+   
+$$f(W)dW=-d\alpha$$    
+    
+Let VaR be the value at risk when $\alpha=c$, then $F(W_0-VaR)=1-c$      
+When$W=-\infty$,  $\alpha=1$.    
+When$W=W_0-VaR$,  $\alpha=c$.    
+$$\int_{-\infty }^{W_0-VaR}Wf(W)dW=\int_{1}^{c}(W_0-VaR_\alpha)(-d\alpha)=\int_{c}^{1}(W_0-VaR_\alpha)d\alpha=W_0(1-c)-\int_{c}^{1}VaR_\alpha  d\alpha$$    
+
+$$\int_{-\infty }^{W_0-VaR}f(W)dW=\int_{1}^{c}(-d\alpha)=\int_{c}^{1}d\alpha=1-c$$    
+
+$$ES=W_0-\frac{W_0(1-c)-\int_{c}^{1}VaR_\alpha  d\alpha}{1-c}=\frac{1}{1-c}\int_{c}^{1}VaR_\alpha d\alpha$$
